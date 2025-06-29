@@ -331,7 +331,8 @@ function App() {
                   </span>
                 </div>
                 
-                {/* Navigation Arrows */}
+                {/* Navigation Arrows - COMMENTED OUT */}
+                {/*
                 <button
                   onClick={prevReason}
                   disabled={isTransitioning}
@@ -347,6 +348,7 @@ function App() {
                 >
                   <ChevronRight className="w-6 h-6 text-white group-hover:scale-110 transition-transform" />
                 </button>
+                */}
 
                 {/* Reason Counter */}
                 <div className="absolute top-4 right-4 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
@@ -393,7 +395,8 @@ function App() {
             </div>
           </section>
 
-          {/* Navigation Controls */}
+          {/* Navigation Controls - COMMENTED OUT */}
+          {/*
           <section className="mb-8">
             <div className="flex justify-center items-center space-x-4 flex-wrap">
               <button
@@ -426,6 +429,7 @@ function App() {
               </button>
             </div>
           </section>
+          */}
 
           {/* Final Message */}
           <section id="final-section" className="text-center">
