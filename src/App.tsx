@@ -1,97 +1,28 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Heart, ArrowLeft, ArrowRight, Sparkles, ChevronLeft, ChevronRight, Music } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Heart, ArrowLeft, ArrowRight, Sparkles, ChevronLeft, ChevronRight, Music, Loader2 } from 'lucide-react';
+import { useReasons } from './hooks/useReasons';
+import { useAudioManager } from './hooks/useAudioManager';
 
 function App() {
+  const { reasons, loading: reasonsLoading } = useReasons();
+  const { playAudio, preloadMultipleAudio, stopAll, isLoading: audioLoading } = useAudioManager();
+  
   const [currentReason, setCurrentReason] = useState(0);
   const [hearts, setHearts] = useState<Array<{ id: number; x: number; y: number; delay: number }>>([]);
   const [isAutoPlay, setIsAutoPlay] = useState(true);
   const [isInFinalSection, setIsInFinalSection] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
-const reasons = [
-  {
-    title: "💖 Your Kindness & Thoughtfulness",
-    description: "I really admire how kind and thoughtful you are, Mam You always notice the little things and care in ways most people don't. It's one of the first things that drew me to you.",
-    image: "/IMG-20250629-WA0018.jpg",
-    song: "Tum Se Hi",
-    audioFile: "/songs/Tum Se Hi.mp3"
-  },
-  {
-    title: "👂 You Actually Listen",
-    description: "You actually listen, Not just hearing words — you genuinely try to understand, and that makes conversations with you feel so real and meaningful.",
-    image: "/IMG-20250629-WA0019.jpg",
-    song: "Tum Se Kiran Dhoop Ki",
-    audioFile: "/songs/Tum Se Kiran Dhoop Ki.mp3"
-  },
-  {
-    title: "🌿 Your Calming Presence",
-    description: "Being around you just feels calming, You have this quiet presence that makes everything feel okay, even when things are chaotic.",
-    image: "/IMG-20250629-WA0020.jpg",
-    song: "Raabta",
-    audioFile: "/songs/Raabta.mp3"
-  },
-  {
-    title: "😊 Your Beautiful Smile",
-    description: "Your smile... it's something else, It's not just beautiful — it has this warmth that makes me feel like I'm in the right place when I see it.",
-    image: "/IMG-20250629-WA0021.jpg",
-    song: "Tera Ban Jaunga",
-    audioFile: "/songs/Tera Ban Jaunga.mp3"
-  },
-  {
-    title: "🧠 Your Emotional Awareness",
-    description: "You're emotionally aware in a way that's rare, You get people, you feel things deeply, and you always seem to know when someone needs support — even without them saying it.",
-    image: "/IMG-20250629-WA0022.jpg",
-    song: "Rabba Rabba (Heropanti)",
-    audioFile: "/songs/Rabba Rabba (Heropanti).mp3"
-  },
-  {
-    title: "🌟 You Inspire Me",
-    description: "You inspire me, Honestly, just by being yourself, you make me want to be a better version of who I already am.",
-    image: "/IMG-20250629-WA0013.jpg",
-    song: "Until I Found You",
-    audioFile: "/songs/Until I Found You.mp3"
-  },
-  {
-    title: "🫶 Your Genuine Nature",
-    description: "You're genuine, You don't pretend to be someone you're not, and that honesty — that realness — is something I respect a lot.",
-    image: "/IMG-20250629-WA0014.jpg",
-    song: "Saathiyaa",
-    audioFile: "/songs/Saathiyaa Singham 128 Kbps.mp3"
-  },
-  {
-    title: "🦋 Your Quiet Strength",
-    description: "You're strong, but in a quiet way, You deal with things without making a show of it, and that quiet strength is something I really admire.",
-    image: "/IMG-20250629-WA0015.jpg",
-    song: "Tumhare Hi Rahenge",
-    audioFile: "/songs/Tumhare Hi Rahenge.mp3"
-  },
-  {
-    title: "👁️‍🗨️ You Make People Feel Seen",
-    description: "You have this way of making people feel seen, Like they matter. Like they're not invisible. That says a lot about the kind of heart you have.",
-    image: "/IMG-20250629-WA0016.jpg",
-    song: "Khoobsurat",
-    audioFile: "/songs/Khoobsurat.mp3"
-  },
-  {
-    title: "🌈 Everything Feels Easy And Natural With You",
-    description: "With you, it all feels easy, I don't feel like I have to try too hard or put on a mask. I can just be me, and that's honestly the best feeling.",
-    image: "/IMG-20250629-WA0017.jpg",
-    song: "Ishq Hai",
-    audioFile: "/songs/Ishq Hai.mp3"
-  }
-];
-
-
-  // Play audio based on current section
-  const playAudio = (audioFile: string) => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = audioFile;
-      audioRef.current.play().catch(error => {
-        console.log('Audio play failed:', error);
-      });
+  // Preload all audio files when reasons are loaded
+  useEffect(() => {
+    if (reasons.length > 0) {
+      const audioFiles = [
+        ...reasons.map(reason => reason.audio_file),
+        '/songs/Zamaana Lage Metro In Dino 128 Kbps.mp3' // Final section song
+      ];
+      preloadMultipleAudio(audioFiles);
     }
-  };
+  }, [reasons, preloadMultipleAudio]);
 
   // Create floating hearts animation
   useEffect(() => {
@@ -111,7 +42,7 @@ const reasons = [
 
   // Auto-rotate reasons
   useEffect(() => {
-    if (!isAutoPlay) return;
+    if (!isAutoPlay || reasons.length === 0) return;
     
     const interval = setInterval(() => {
       setCurrentReason(prev => (prev + 1) % reasons.length);
@@ -119,12 +50,37 @@ const reasons = [
     return () => clearInterval(interval);
   }, [reasons.length, isAutoPlay]);
 
+  // Handle reason change with optimized audio switching
+  const handleReasonChange = useCallback(async (newIndex: number) => {
+    if (newIndex === currentReason || reasons.length === 0) return;
+    
+    setIsTransitioning(true);
+    
+    try {
+      // Preload next song with offset timing
+      const reason = reasons[newIndex];
+      if (reason?.preload_offset) {
+        setTimeout(() => {
+          playAudio(reason.audio_file);
+        }, reason.preload_offset);
+      } else {
+        await playAudio(reason.audio_file);
+      }
+      
+      setCurrentReason(newIndex);
+    } catch (error) {
+      console.error('Error changing reason:', error);
+    } finally {
+      setIsTransitioning(false);
+    }
+  }, [currentReason, reasons, playAudio]);
+
   // Play song when reason changes
   useEffect(() => {
-    if (!isInFinalSection) {
-      playAudio(reasons[currentReason].audioFile);
+    if (!isInFinalSection && reasons.length > 0 && reasons[currentReason]) {
+      playAudio(reasons[currentReason].audio_file);
     }
-  }, [currentReason, isInFinalSection]);
+  }, [currentReason, isInFinalSection, reasons, playAudio]);
 
   // Detect when user scrolls to final section
   useEffect(() => {
@@ -139,28 +95,32 @@ const reasons = [
           playAudio('/songs/Zamaana Lage Metro In Dino 128 Kbps.mp3');
         } else if (!isVisible && isInFinalSection) {
           setIsInFinalSection(false);
-          playAudio(reasons[currentReason].audioFile);
+          if (reasons[currentReason]) {
+            playAudio(reasons[currentReason].audio_file);
+          }
         }
       }
     };
 
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [isInFinalSection, currentReason]);
+  }, [isInFinalSection, currentReason, reasons, playAudio]);
 
   const nextReason = () => {
     setIsAutoPlay(false);
-    setCurrentReason(prev => (prev + 1) % reasons.length);
+    const nextIndex = (currentReason + 1) % reasons.length;
+    handleReasonChange(nextIndex);
   };
 
   const prevReason = () => {
     setIsAutoPlay(false);
-    setCurrentReason(prev => (prev - 1 + reasons.length) % reasons.length);
+    const prevIndex = (currentReason - 1 + reasons.length) % reasons.length;
+    handleReasonChange(prevIndex);
   };
 
   const goToReason = (index: number) => {
     setIsAutoPlay(false);
-    setCurrentReason(index);
+    handleReasonChange(index);
   };
 
   // Get specific image positioning for better mobile display
@@ -179,11 +139,33 @@ const reasons = [
     }
   };
 
+  // Loading state
+  if (reasonsLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-red-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-pink-500 animate-spin mx-auto mb-4" />
+          <p className="text-lg text-gray-600">Loading your beautiful reasons...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (reasons.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-red-50 flex items-center justify-center">
+        <div className="text-center">
+          <Heart className="w-12 h-12 text-pink-500 mx-auto mb-4" />
+          <p className="text-lg text-gray-600">No reasons found. Please check your connection.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const currentReasonData = reasons[currentReason];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-red-50 overflow-hidden relative">
-      {/* Hidden Audio Element */}
-      <audio ref={audioRef} loop />
-
       {/* Floating Hearts Background */}
       <div className="fixed inset-0 pointer-events-none z-0">
         {hearts.map(heart => (
@@ -215,6 +197,14 @@ const reasons = [
           <p className="text-sm md:text-lg text-gray-600 font-medium">
             Every reason my heart beats for you, beautiful soul
           </p>
+          
+          {/* Audio Loading Indicator */}
+          {(audioLoading || isTransitioning) && (
+            <div className="mt-2 flex items-center justify-center space-x-2">
+              <Loader2 className="w-4 h-4 text-pink-500 animate-spin" />
+              <span className="text-sm text-pink-600">Syncing audio...</span>
+            </div>
+          )}
         </div>
       </header>
 
@@ -224,12 +214,12 @@ const reasons = [
           
           {/* Current Reason Card */}
           <section className="mb-8">
-            <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-pink-100 overflow-hidden hover:shadow-3xl transition-all duration-500">
+            <div className={`bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-pink-100 overflow-hidden hover:shadow-3xl transition-all duration-500 ${isTransitioning ? 'opacity-75' : 'opacity-100'}`}>
               
               {/* Image Section */}
               <div className="relative h-64 md:h-80 lg:h-96 overflow-hidden">
                 <img 
-                  src={reasons[currentReason].image}
+                  src={currentReasonData.image}
                   alt="Beautiful Sakshi"
                   className={getImageClasses(currentReason)}
                 />
@@ -239,21 +229,23 @@ const reasons = [
                 <div className="absolute top-4 left-4 bg-white/20 backdrop-blur-sm rounded-full px-4 py-2 flex items-center space-x-2">
                   <Music className="w-4 h-4 text-white animate-pulse" />
                   <span className="text-white font-medium text-sm">
-                    {reasons[currentReason].song}
+                    {currentReasonData.song}
                   </span>
                 </div>
                 
                 {/* Navigation Arrows */}
                 <button
                   onClick={prevReason}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-all duration-300 group"
+                  disabled={isTransitioning}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-all duration-300 group disabled:opacity-50"
                 >
                   <ChevronLeft className="w-6 h-6 text-white group-hover:scale-110 transition-transform" />
                 </button>
                 
                 <button
                   onClick={nextReason}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-all duration-300 group"
+                  disabled={isTransitioning}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-all duration-300 group disabled:opacity-50"
                 >
                   <ChevronRight className="w-6 h-6 text-white group-hover:scale-110 transition-transform" />
                 </button>
@@ -274,11 +266,11 @@ const reasons = [
                   </div>
                   
                   <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-800 mb-6 leading-tight">
-                    {reasons[currentReason].title}
+                    {currentReasonData.title}
                   </h2>
                   
                   <p className="text-lg md:text-xl text-gray-600 leading-relaxed max-w-3xl mx-auto mb-6">
-                    {reasons[currentReason].description}
+                    {currentReasonData.description}
                   </p>
                 </div>
               </div>
@@ -292,7 +284,8 @@ const reasons = [
                 <button
                   key={index}
                   onClick={() => goToReason(index)}
-                  className={`w-3 h-3 rounded-full transition-all duration-300 m-1 ${
+                  disabled={isTransitioning}
+                  className={`w-3 h-3 rounded-full transition-all duration-300 m-1 disabled:opacity-50 ${
                     index === currentReason 
                       ? 'bg-pink-500 scale-125' 
                       : 'bg-pink-200 hover:bg-pink-300'
@@ -307,7 +300,8 @@ const reasons = [
             <div className="flex justify-center items-center space-x-4 flex-wrap">
               <button
                 onClick={prevReason}
-                className="flex items-center space-x-2 bg-white/70 backdrop-blur-sm rounded-full px-6 py-3 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group m-2"
+                disabled={isTransitioning}
+                className="flex items-center space-x-2 bg-white/70 backdrop-blur-sm rounded-full px-6 py-3 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group m-2 disabled:opacity-50"
               >
                 <ArrowLeft className="w-5 h-5 text-pink-600 group-hover:-translate-x-1 transition-transform" />
                 <span className="text-pink-600 font-medium">Previous</span>
@@ -326,7 +320,8 @@ const reasons = [
               
               <button
                 onClick={nextReason}
-                className="flex items-center space-x-2 bg-white/70 backdrop-blur-sm rounded-full px-6 py-3 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group m-2"
+                disabled={isTransitioning}
+                className="flex items-center space-x-2 bg-white/70 backdrop-blur-sm rounded-full px-6 py-3 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group m-2 disabled:opacity-50"
               >
                 <span className="text-pink-600 font-medium">Next</span>
                 <ArrowRight className="w-5 h-5 text-pink-600 group-hover:translate-x-1 transition-transform" />
@@ -365,7 +360,7 @@ const reasons = [
       </main>
 
       {/* Custom Styles */}
-      <style jsx>{`
+      <style>{`
         @keyframes float-up {
           0% {
             transform: translateY(0) rotate(0deg);
@@ -382,24 +377,7 @@ const reasons = [
         .animate-float-up {
           animation: float-up 10s linear infinite;
         }
-      `}</style><style>{`
-  @keyframes float-up {
-    0% {
-      transform: translateY(0) rotate(0deg);
-      opacity: 0.3;
-    }
-    50% {
-      opacity: 0.6;
-    }
-    100% {
-      transform: translateY(-100vh) rotate(360deg);
-      opacity: 0;
-    }
-  }
-  .animate-float-up {
-    animation: float-up 10s linear infinite;
-  }
-`}</style>
+      `}</style>
 
     </div>
   );
