@@ -1,5 +1,4 @@
 import { useRef, useCallback, useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
 
 interface AudioInstance {
   audio: HTMLAudioElement
@@ -12,7 +11,7 @@ export const useAudioManager = () => {
   const currentAudio = useRef<HTMLAudioElement | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
-  // Preload audio file
+  // Preload audio file with immediate loading
   const preloadAudio = useCallback(async (audioFile: string): Promise<void> => {
     if (audioInstances.current.has(audioFile)) {
       return audioInstances.current.get(audioFile)?.loadPromise || Promise.resolve()
@@ -27,37 +26,35 @@ export const useAudioManager = () => {
 
     audioInstances.current.set(audioFile, instance)
 
-    const loadPromise = new Promise<void>((resolve, reject) => {
+    const loadPromise = new Promise<void>((resolve) => {
       const handleLoad = () => {
         instance.isLoaded = true
         audio.removeEventListener('canplaythrough', handleLoad)
+        audio.removeEventListener('loadeddata', handleLoad)
         audio.removeEventListener('error', handleError)
-        
-        // Cache the load status in database
-        supabase
-          .from('audio_cache')
-          .upsert({
-            audio_file: audioFile,
-            is_loaded: true,
-            load_time: Date.now()
-          })
-          .then(() => resolve())
-          .catch(() => resolve()) // Don't fail if DB update fails
+        resolve()
       }
 
       const handleError = () => {
         audio.removeEventListener('canplaythrough', handleLoad)
+        audio.removeEventListener('loadeddata', handleLoad)
         audio.removeEventListener('error', handleError)
-        reject(new Error(`Failed to load audio: ${audioFile}`))
+        console.warn(`Failed to load audio: ${audioFile}`)
+        resolve() // Don't reject, just resolve to continue
       }
 
       audio.addEventListener('canplaythrough', handleLoad)
+      audio.addEventListener('loadeddata', handleLoad)
       audio.addEventListener('error', handleError)
       
-      // Set audio properties for better performance
+      // Set audio properties for instant playback
       audio.preload = 'auto'
       audio.loop = true
       audio.volume = 0.7
+      audio.crossOrigin = 'anonymous'
+      
+      // Force immediate loading
+      audio.load()
       audio.src = audioFile
     })
 
@@ -65,11 +62,9 @@ export const useAudioManager = () => {
     return loadPromise
   }, [])
 
-  // Play audio with instant switching
+  // Play audio with zero delay
   const playAudio = useCallback(async (audioFile: string): Promise<void> => {
     try {
-      setIsLoading(true)
-
       // Stop current audio immediately
       if (currentAudio.current) {
         currentAudio.current.pause()
@@ -85,39 +80,42 @@ export const useAudioManager = () => {
       }
 
       if (!instance) {
-        throw new Error('Failed to create audio instance')
+        console.warn('Failed to create audio instance for:', audioFile)
+        return
       }
 
-      // Wait for audio to be loaded if not already
-      if (!instance.isLoaded && instance.loadPromise) {
-        await instance.loadPromise
-      }
-
-      // Set as current and play
+      // Set as current audio
       currentAudio.current = instance.audio
+      
+      // Reset and play immediately
       instance.audio.currentTime = 0
       
-      // Use requestAnimationFrame for smoother transition
-      requestAnimationFrame(() => {
-        instance!.audio.play().catch(error => {
+      // Play without waiting - use immediate execution
+      const playPromise = instance.audio.play()
+      
+      if (playPromise) {
+        playPromise.catch(error => {
           console.warn('Audio play failed:', error)
         })
-      })
+      }
 
     } catch (error) {
       console.error('Error playing audio:', error)
-    } finally {
-      setIsLoading(false)
     }
   }, [preloadAudio])
 
-  // Preload multiple audio files
+  // Preload multiple audio files in parallel
   const preloadMultipleAudio = useCallback(async (audioFiles: string[]): Promise<void> => {
-    const promises = audioFiles.map(file => preloadAudio(file).catch(err => {
-      console.warn(`Failed to preload ${file}:`, err)
-    }))
+    setIsLoading(true)
+    
+    const promises = audioFiles.map(file => 
+      preloadAudio(file).catch(err => {
+        console.warn(`Failed to preload ${file}:`, err)
+      })
+    )
     
     await Promise.allSettled(promises)
+    setIsLoading(false)
   }, [preloadAudio])
 
   // Stop all audio

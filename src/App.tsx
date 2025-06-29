@@ -1,10 +1,92 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Heart, ArrowLeft, ArrowRight, Sparkles, ChevronLeft, ChevronRight, Music, Loader2 } from 'lucide-react';
-import { useReasons } from './hooks/useReasons';
 import { useAudioManager } from './hooks/useAudioManager';
 
+// Static data with all 10 reasons
+const reasons = [
+  {
+    id: 1,
+    title: "💖 Your Kindness & Thoughtfulness",
+    description: "I really admire how kind and thoughtful you are, Mam You always notice the little things and care in ways most people don't. It's one of the first things that drew me to you.",
+    image: "/IMG-20250629-WA0018.jpg",
+    song: "Tum Se Hi",
+    audio_file: "/songs/Tum Se Hi.mp3"
+  },
+  {
+    id: 2,
+    title: "👂 You Actually Listen",
+    description: "You actually listen, Not just hearing words — you genuinely try to understand, and that makes conversations with you feel so real and meaningful.",
+    image: "/IMG-20250629-WA0019.jpg",
+    song: "Tum Se Kiran Dhoop Ki",
+    audio_file: "/songs/Tum Se Kiran Dhoop Ki.mp3"
+  },
+  {
+    id: 3,
+    title: "🌿 Your Calming Presence",
+    description: "Being around you just feels calming, You have this quiet presence that makes everything feel okay, even when things are chaotic.",
+    image: "/IMG-20250629-WA0020.jpg",
+    song: "Raabta",
+    audio_file: "/songs/Raabta.mp3"
+  },
+  {
+    id: 4,
+    title: "😊 Your Beautiful Smile",
+    description: "Your smile... it's something else, It's not just beautiful — it has this warmth that makes me feel like I'm in the right place when I see it.",
+    image: "/IMG-20250629-WA0021.jpg",
+    song: "Tera Ban Jaunga",
+    audio_file: "/songs/Tera Ban Jaunga.mp3"
+  },
+  {
+    id: 5,
+    title: "🧠 Your Emotional Awareness",
+    description: "You're emotionally aware in a way that's rare, You get people, you feel things deeply, and you always seem to know when someone needs support — even without them saying it.",
+    image: "/IMG-20250629-WA0022.jpg",
+    song: "Rabba Rabba (Heropanti)",
+    audio_file: "/songs/Rabba Rabba (Heropanti).mp3"
+  },
+  {
+    id: 6,
+    title: "🌟 You Inspire Me",
+    description: "You inspire me, Honestly, just by being yourself, you make me want to be a better version of who I already am.",
+    image: "/IMG-20250629-WA0013.jpg",
+    song: "Until I Found You",
+    audio_file: "/songs/Until I Found You.mp3"
+  },
+  {
+    id: 7,
+    title: "🫶 Your Genuine Nature",
+    description: "You're genuine, You don't pretend to be someone you're not, and that honesty — that realness — is something I respect a lot.",
+    image: "/IMG-20250629-WA0014.jpg",
+    song: "Saathiyaa",
+    audio_file: "/songs/Saathiyaa Singham 128 Kbps.mp3"
+  },
+  {
+    id: 8,
+    title: "🦋 Your Quiet Strength",
+    description: "You're strong, but in a quiet way, You deal with things without making a show of it, and that quiet strength is something I really admire.",
+    image: "/IMG-20250629-WA0015.jpg",
+    song: "Tumhare Hi Rahenge",
+    audio_file: "/songs/Tumhare Hi Rahenge.mp3"
+  },
+  {
+    id: 9,
+    title: "👁️‍🗨️ You Make People Feel Seen",
+    description: "You have this way of making people feel seen, Like they matter. Like they're not invisible. That says a lot about the kind of heart you have.",
+    image: "/IMG-20250629-WA0016.jpg",
+    song: "Khoobsurat",
+    audio_file: "/songs/Khoobsurat.mp3"
+  },
+  {
+    id: 10,
+    title: "🌈 Everything Feels Easy And Natural With You",
+    description: "With you, it all feels easy, I don't feel like I have to try too hard or put on a mask. I can just be me, and that's honestly the best feeling.",
+    image: "/IMG-20250629-WA0017.jpg",
+    song: "Ishq Hai",
+    audio_file: "/songs/Ishq Hai.mp3"
+  }
+];
+
 function App() {
-  const { reasons, loading: reasonsLoading } = useReasons();
   const { playAudio, preloadMultipleAudio, stopAll, isLoading: audioLoading } = useAudioManager();
   
   const [currentReason, setCurrentReason] = useState(0);
@@ -13,16 +95,14 @@ function App() {
   const [isInFinalSection, setIsInFinalSection] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
-  // Preload all audio files when reasons are loaded
+  // Preload all audio files when component mounts
   useEffect(() => {
-    if (reasons.length > 0) {
-      const audioFiles = [
-        ...reasons.map(reason => reason.audio_file),
-        '/songs/Zamaana Lage Metro In Dino 128 Kbps.mp3' // Final section song
-      ];
-      preloadMultipleAudio(audioFiles);
-    }
-  }, [reasons, preloadMultipleAudio]);
+    const audioFiles = [
+      ...reasons.map(reason => reason.audio_file),
+      '/songs/Zamaana Lage Metro In Dino 128 Kbps.mp3' // Final section song
+    ];
+    preloadMultipleAudio(audioFiles);
+  }, [preloadMultipleAudio]);
 
   // Create floating hearts animation
   useEffect(() => {
@@ -48,39 +128,35 @@ function App() {
       setCurrentReason(prev => (prev + 1) % reasons.length);
     }, 8000);
     return () => clearInterval(interval);
-  }, [reasons.length, isAutoPlay]);
+  }, [isAutoPlay]);
 
-  // Handle reason change with optimized audio switching
+  // Handle reason change with instant audio switching
   const handleReasonChange = useCallback(async (newIndex: number) => {
-    if (newIndex === currentReason || reasons.length === 0) return;
+    if (newIndex === currentReason) return;
     
     setIsTransitioning(true);
     
-    try {
-      // Preload next song with offset timing
-      const reason = reasons[newIndex];
-      if (reason?.preload_offset) {
-        setTimeout(() => {
-          playAudio(reason.audio_file);
-        }, reason.preload_offset);
-      } else {
-        await playAudio(reason.audio_file);
-      }
-      
-      setCurrentReason(newIndex);
-    } catch (error) {
-      console.error('Error changing reason:', error);
-    } finally {
-      setIsTransitioning(false);
+    // Change reason immediately
+    setCurrentReason(newIndex);
+    
+    // Play audio instantly without waiting
+    const reason = reasons[newIndex];
+    if (reason && !isInFinalSection) {
+      playAudio(reason.audio_file);
     }
-  }, [currentReason, reasons, playAudio]);
+    
+    // Reset transition state quickly
+    setTimeout(() => {
+      setIsTransitioning(false);
+    }, 300);
+  }, [currentReason, isInFinalSection, playAudio]);
 
-  // Play song when reason changes
+  // Play song when reason changes (with instant sync)
   useEffect(() => {
-    if (!isInFinalSection && reasons.length > 0 && reasons[currentReason]) {
+    if (!isInFinalSection && reasons[currentReason]) {
       playAudio(reasons[currentReason].audio_file);
     }
-  }, [currentReason, isInFinalSection, reasons, playAudio]);
+  }, [currentReason, isInFinalSection, playAudio]);
 
   // Detect when user scrolls to final section
   useEffect(() => {
@@ -104,7 +180,7 @@ function App() {
 
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [isInFinalSection, currentReason, reasons, playAudio]);
+  }, [isInFinalSection, currentReason, playAudio]);
 
   const nextReason = () => {
     setIsAutoPlay(false);
@@ -138,29 +214,6 @@ function App() {
         return `${baseClasses} object-cover object-center`;
     }
   };
-
-  // Loading state
-  if (reasonsLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-red-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 text-pink-500 animate-spin mx-auto mb-4" />
-          <p className="text-lg text-gray-600">Loading your beautiful reasons...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (reasons.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-red-50 flex items-center justify-center">
-        <div className="text-center">
-          <Heart className="w-12 h-12 text-pink-500 mx-auto mb-4" />
-          <p className="text-lg text-gray-600">No reasons found. Please check your connection.</p>
-        </div>
-      </div>
-    );
-  }
 
   const currentReasonData = reasons[currentReason];
 
