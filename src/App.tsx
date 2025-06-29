@@ -331,8 +331,7 @@ function App() {
                   </span>
                 </div>
                 
-                {/* Navigation Arrows - COMMENTED OUT */}
-                {/*
+                {/* Navigation Arrows - RESTORED */}
                 <button
                   onClick={prevReason}
                   disabled={isTransitioning}
@@ -348,7 +347,6 @@ function App() {
                 >
                   <ChevronRight className="w-6 h-6 text-white group-hover:scale-110 transition-transform" />
                 </button>
-                */}
 
                 {/* Reason Counter */}
                 <div className="absolute top-4 right-4 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
