@@ -87,13 +87,14 @@ const reasons = [
 ];
 
 function App() {
-  const { playAudio, preloadMultipleAudio, stopAll, isLoading: audioLoading } = useAudioManager();
+  const { playAudio, preloadMultipleAudio, stopAll, isLoading: audioLoading, isReady } = useAudioManager();
   
   const [currentReason, setCurrentReason] = useState(0);
   const [hearts, setHearts] = useState<Array<{ id: number; x: number; y: number; delay: number }>>([]);
   const [isAutoPlay, setIsAutoPlay] = useState(true);
   const [isInFinalSection, setIsInFinalSection] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [audioInitialized, setAudioInitialized] = useState(false);
 
   // Preload all audio files when component mounts
   useEffect(() => {
@@ -103,6 +104,36 @@ function App() {
     ];
     preloadMultipleAudio(audioFiles);
   }, [preloadMultipleAudio]);
+
+  // Initialize audio on first user interaction
+  useEffect(() => {
+    const initializeAudio = () => {
+      if (!audioInitialized && isReady) {
+        setAudioInitialized(true);
+        // Start playing the first song
+        playAudio(reasons[0].audio_file);
+      }
+    };
+
+    const handleUserInteraction = () => {
+      initializeAudio();
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('touchstart', handleUserInteraction);
+    };
+
+    if (isReady && !audioInitialized) {
+      document.addEventListener('click', handleUserInteraction);
+      document.addEventListener('touchstart', handleUserInteraction);
+      
+      // Also try to initialize immediately (works if autoplay is allowed)
+      setTimeout(initializeAudio, 1000);
+    }
+
+    return () => {
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('touchstart', handleUserInteraction);
+    };
+  }, [isReady, audioInitialized, playAudio]);
 
   // Create floating hearts animation
   useEffect(() => {
@@ -122,13 +153,13 @@ function App() {
 
   // Auto-rotate reasons
   useEffect(() => {
-    if (!isAutoPlay || reasons.length === 0) return;
+    if (!isAutoPlay || !audioInitialized) return;
     
     const interval = setInterval(() => {
       setCurrentReason(prev => (prev + 1) % reasons.length);
     }, 8000);
     return () => clearInterval(interval);
-  }, [isAutoPlay]);
+  }, [isAutoPlay, audioInitialized]);
 
   // Handle reason change with instant audio switching
   const handleReasonChange = useCallback(async (newIndex: number) => {
@@ -139,9 +170,9 @@ function App() {
     // Change reason immediately
     setCurrentReason(newIndex);
     
-    // Play audio instantly without waiting
+    // Play audio instantly if initialized
     const reason = reasons[newIndex];
-    if (reason && !isInFinalSection) {
+    if (reason && !isInFinalSection && audioInitialized) {
       playAudio(reason.audio_file);
     }
     
@@ -149,14 +180,14 @@ function App() {
     setTimeout(() => {
       setIsTransitioning(false);
     }, 300);
-  }, [currentReason, isInFinalSection, playAudio]);
+  }, [currentReason, isInFinalSection, playAudio, audioInitialized]);
 
-  // Play song when reason changes (with instant sync)
+  // Play song when reason changes (only if audio is initialized)
   useEffect(() => {
-    if (!isInFinalSection && reasons[currentReason]) {
+    if (!isInFinalSection && audioInitialized && reasons[currentReason]) {
       playAudio(reasons[currentReason].audio_file);
     }
-  }, [currentReason, isInFinalSection, playAudio]);
+  }, [currentReason, isInFinalSection, playAudio, audioInitialized]);
 
   // Detect when user scrolls to final section
   useEffect(() => {
@@ -166,10 +197,10 @@ function App() {
         const rect = finalSection.getBoundingClientRect();
         const isVisible = rect.top < window.innerHeight && rect.bottom > 0;
         
-        if (isVisible && !isInFinalSection) {
+        if (isVisible && !isInFinalSection && audioInitialized) {
           setIsInFinalSection(true);
           playAudio('/songs/Zamaana Lage Metro In Dino 128 Kbps.mp3');
-        } else if (!isVisible && isInFinalSection) {
+        } else if (!isVisible && isInFinalSection && audioInitialized) {
           setIsInFinalSection(false);
           if (reasons[currentReason]) {
             playAudio(reasons[currentReason].audio_file);
@@ -180,7 +211,7 @@ function App() {
 
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [isInFinalSection, currentReason, playAudio]);
+  }, [isInFinalSection, currentReason, playAudio, audioInitialized]);
 
   const nextReason = () => {
     setIsAutoPlay(false);
@@ -251,11 +282,25 @@ function App() {
             Every reason my heart beats for you, beautiful soul
           </p>
           
-          {/* Audio Loading Indicator */}
-          {(audioLoading || isTransitioning) && (
+          {/* Audio Status Indicators */}
+          {audioLoading && (
             <div className="mt-2 flex items-center justify-center space-x-2">
               <Loader2 className="w-4 h-4 text-pink-500 animate-spin" />
-              <span className="text-sm text-pink-600">Syncing audio...</span>
+              <span className="text-sm text-pink-600">Loading audio...</span>
+            </div>
+          )}
+          
+          {!audioInitialized && isReady && (
+            <div className="mt-2 flex items-center justify-center space-x-2">
+              <Music className="w-4 h-4 text-pink-500 animate-pulse" />
+              <span className="text-sm text-pink-600">Click anywhere to start music</span>
+            </div>
+          )}
+          
+          {isTransitioning && (
+            <div className="mt-2 flex items-center justify-center space-x-2">
+              <Loader2 className="w-4 h-4 text-pink-500 animate-spin" />
+              <span className="text-sm text-pink-600">Switching song...</span>
             </div>
           )}
         </div>
@@ -280,7 +325,7 @@ function App() {
                 
                 {/* Song Badge */}
                 <div className="absolute top-4 left-4 bg-white/20 backdrop-blur-sm rounded-full px-4 py-2 flex items-center space-x-2">
-                  <Music className="w-4 h-4 text-white animate-pulse" />
+                  <Music className={`w-4 h-4 text-white ${audioInitialized ? 'animate-pulse' : ''}`} />
                   <span className="text-white font-medium text-sm">
                     {currentReasonData.song}
                   </span>
